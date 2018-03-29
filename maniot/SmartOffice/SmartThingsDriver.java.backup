@@ -1,0 +1,222 @@
+//***VERY IMPORTANT NOTE***
+//THIS CODE WORKS ONLY FOR DANIEL'S ROOM AND WILL BE USED TO GATHER DATA
+//FOR GUILLERMO'S RESEARCH. PLEASE DO NOT USE IT FOR OTHER PURPOSES
+
+import java.util.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileNotFoundException;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONArray;
+
+public class SmartThingsDriver {
+
+	private JSONArray smartThingsData;
+	//All these variables are from SmartApps
+  private String keyChainName;
+  private String apiEndpoint;
+  private String path;
+  private String apiToken;
+  //Selects wich device will be used by this Class to define whether the user is present or not (may be user's phone, key chain)
+  private String device;
+  private String propertyFileName = "SmartThings.properties";
+
+	public SmartThingsDriver (){
+    	try {
+            FileReader reader = new FileReader(propertyFileName);
+            Properties prop = new Properties();
+            prop.load(reader);
+
+            // Allocate initial values to variables according to SmartApps
+	    	// These informations should be on a .properties file
+            keyChainName = prop.getProperty("KEY_CHAIN_NAME");
+            apiEndpoint = prop.getProperty("API_ENDPONT");
+            path = prop.getProperty("ENDPOINT_PATH");
+            apiToken = prop.getProperty("API_TOKEN");
+            reader.close();
+        } 
+        catch (FileNotFoundException ex) { // file does not exist 
+	       //System.out.println(ex);
+            System.out.println("KEY CHAIN:    "+propertyFileName+" does not exist.");
+        } 
+        catch (IOException ex) { // I/O error
+	       //System.out.println(ex);
+            System.out.println("KEY CHAIN:     can't read succesfully from file.");
+        }
+    }
+
+    //This is the first thing that has to be done when using this driver
+	public void connect () throws JSONException {
+    //path must come with "/", exemple: /env, /switches...
+    	String stringUrl = apiEndpoint+path;
+    	try{
+      		URL url = new URL(stringUrl);
+      		URLConnection uc = url.openConnection();
+      		uc.setRequestProperty("X-Requested-With", "Curl");
+      		uc.setRequestProperty("Authorization", "Bearer " + apiToken);
+      		BufferedReader in = new BufferedReader(new InputStreamReader(uc.getInputStream()));
+      		String inputLine;
+      		StringBuffer response = new StringBuffer();
+      		while ((inputLine = in.readLine()) != null){
+        		response.append(inputLine);
+      		}
+      		in.close();
+      		String dataStringFormat = response.toString();
+			smartThingsData = new JSONArray(dataStringFormat);
+    	}
+    	catch (IOException ex) {
+      		System.out.println ("Invalid URL: "+ stringUrl);
+    	}
+  	}
+
+  	public double getTemperatureByDevice (String device) throws JSONException {
+  		double temp = 0;
+  		for (int i = 0; i < smartThingsData.length(); i++) {
+    		JSONObject jsonobject = smartThingsData.getJSONObject(i);
+    		String sensor = jsonobject.getString("sensor");
+    		String name = jsonobject.getString("name");
+    		if (name.equals(device) && sensor.equals("Temperature")){
+    			temp = jsonobject.getDouble("value");
+    			break;
+    		}
+    		else if (i == smartThingsData.length() - 1) {
+    			System.out.println("Device not found.");
+          return -274;
+    			//This temperature doesn't exist in celcius, because it is below 0 Kelvin
+    		}
+		}
+		return temp;
+  	}
+
+  	public int getDWStatusByDevice (String device) throws JSONException {
+		int dwStatus = -1;
+  		for (int i = 0; i < smartThingsData.length(); i++) {
+    		JSONObject jsonobject = smartThingsData.getJSONObject(i);
+    		String sensor = jsonobject.getString("sensor");
+    		String name = jsonobject.getString("name");
+    		if (name.equals(device) && sensor.equals("Door/Window")){
+    			String dwString = jsonobject.getString("value");
+          		if (dwString.equals("open")){
+            		dwStatus = 1;
+          		}
+          		else {
+            		dwStatus = 0;
+         	 	}
+    			break;
+    		}
+    		else if (i == smartThingsData.length() - 1) {
+    			System.out.println("Device not found.");
+    		}
+		  }
+		  return dwStatus;
+  	}
+
+  	public int getHumidityByDevice (String device) throws JSONException {
+  		int humidity = 0;
+  		for (int i = 0; i < smartThingsData.length(); i++) {
+    		JSONObject jsonobject = smartThingsData.getJSONObject(i);
+    		String sensor = jsonobject.getString("sensor");
+    		String name = jsonobject.getString("name");
+    		if (name.equals(device) && sensor.equals("Humidity")){
+    			humidity = jsonobject.getInt("value");
+    			break;
+    		}
+    		else if (i == smartThingsData.length() - 1) {
+          		System.out.println("Device not found.");
+    			return -1;
+    		}
+		}
+		return humidity;
+  	}
+
+  	public int getIlluminanceByDevice (String device) throws JSONException {
+  		int illuminance = 0;
+  		for (int i = 0; i < smartThingsData.length(); i++) {
+    		JSONObject jsonobject = smartThingsData.getJSONObject(i);
+    		String sensor = jsonobject.getString("sensor");
+    		String name = jsonobject.getString("name");
+    		if (name.equals(device) && sensor.equals("Illuminance")){
+    			illuminance = jsonobject.getInt("value");
+    			break;
+    		}
+    		else if (i == smartThingsData.length() - 1) {
+          		System.out.println("Device not found.");
+    			return -1;
+    		}
+		}
+		return illuminance;
+  	}
+
+  	public int getPresenceByDevice (String device) throws JSONException {
+  		int presence= 0;
+  		for (int i = 0; i < smartThingsData.length(); i++) {
+    		JSONObject jsonobject = smartThingsData.getJSONObject(i);
+    		String sensor = jsonobject.getString("sensor");
+    		String name = jsonobject.getString("name");
+    		if (name.equals(device) && sensor.equals("Presence")){
+    			String presenceString = jsonobject.getString("value");
+    			if (presenceString.equals("present")) {
+    				presence = 1;
+    			}
+    			else {
+    				presence = 0;
+    			}
+    			break;
+    		}
+    		else if (i == smartThingsData.length() - 1) {
+          		System.out.println("Device not found.");
+    			return -1;
+    		}
+		}
+		return presence;
+  	}
+	
+	//Write to file:
+	/*try (FileWriter file = new FileWriter("/home/gustavo/Desktop/MANIOT/JSON/file1.json")) {
+		file.write(smartThingsData.toString(4));
+		System.out.println("Printing JSON to file...");
+	}
+	catch (IOException e){
+		e.printStackTrace();
+	}
+	finally {
+		System.out.println("Done.");
+	}*/
+
+    public static void main(String[] args) throws IOException, JSONException {
+    SmartThingsDriver site = new SmartThingsDriver();
+    site.connect();
+
+    /*System.out.println(site.getTemperatureByDevice("Aeon Labs MultiSensor 6")+" C");
+
+    System.out.println(site.getIlluminanceByDevice("Aeon Labs MultiSensor 6")+" lx");
+
+    System.out.println(site.getHumidityByDevice("Aeon Labs MultiSensor 6")+" %");*/
+
+    
+
+	while(true){
+		System.out.print("Enter something:");
+    	String input = System.console().readLine();
+		if (input.equals("sim")){
+			site.connect();
+			System.out.println(site.getDWStatusByDevice("Porta Daniel"));
+		}
+	}
+    /*System.out.println(site.getDWStatusByDevice("Janela Daniel"));
+
+    System.out.println(site.getPresenceByDevice("Chaveiro Daniel"));*/
+    }
+  
+}

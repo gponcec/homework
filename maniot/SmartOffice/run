@@ -1,0 +1,13 @@
+#!/bin/sh
+PTH=`pwd`/
+DEP=Dependencies/
+CLS=Classes/
+JVA=Java/
+
+
+if cygpath -w / >/dev/null 2>/dev/null; then
+  CLASSPATH="main.jar;$CLASSPATH"
+else
+  CLASSPATH="main.jar:$CLASSPATH"
+fi
+java -cp .:$PTH$DEP*:$PTH$CLS  Main

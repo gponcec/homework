@@ -1,0 +1,132 @@
+import java.io.*;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Vector;
+import java.util.List;
+import java.util.Properties;
+
+// SQL
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+//CONNECTION
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+
+// REST 
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.core.MediaType;
+
+public class Orchestrator implements Runnable{
+
+Storage driverDatabase = new Storage();
+PresenceScanner presenceDriver = new WIFIPresenceScanner();
+KeyChainPresenceScanner KeyChainPresenceDriver = new KeyChainPresenceScanner();
+
+
+public Orchestrator(){
+
+}
+
+public void run(){
+        while (true)
+        {
+   	    //Use properties to define priority and device names.
+            int kcG = KeyChainPresenceDriver.scanPresenceKeyChain("Chaveiro Guillermo");
+	    int kcD = KeyChainPresenceDriver.scanPresenceKeyChain("Chaveiro Daniel");
+	    System.out.println("Guillermo: "+ kcG +"\nDaniel: "+ kcD);
+	    int s = presenceDriver.defineUserPresence();
+            if(s == presenceDriver.LONG_TIME_OUTSIDE){
+                System.out.println("LONG TIME OUTSIDE the room.");
+                }
+
+            else if(s == presenceDriver.RECENTLY_INSIDE){
+                System.out.println("ENTER RECENTLY INTO the room.");
+                
+		String parameters = getPredictorParameters(); System.out.println(parameters);
+		
+
+		try {
+                    Process proc = Runtime.getRuntime().exec(new String[] {"python", "-c", "import Predictor; Predictor.predict("+parameters+")"});
+                    System.out.println("ENVIO A PREDCITOR");
+                 }
+                 catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.out.println("Error: Predictor has failed calculating or executing prediction.");
+                }
+            }
+            else if(s == presenceDriver.LONG_TIME_INSIDE){
+                System.out.println("LONG TIME INTO the room.");
+            }
+            else if(s == presenceDriver.RECENTLY_OUTSIDE){
+                System.out.println("RECENLTLY OUTSIDE the room.");
+                try {
+                    Process proc = Runtime.getRuntime().exec(new String[] {"python", "-c", "import Predictor; Predictor.disactivate_devices()"});
+                }
+                catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.out.println("Error: Predictor has failed disabling devices.");
+                }
+            }//end of else                        
+        }//while end
+    }//run end
+
+  public static Vector<String> getOrchProperties()
+    {
+        Properties prop = new Properties();
+        InputStream input = null;
+        Vector<String> values = new Vector<String>();
+
+        try {
+            input = new FileInputStream("Orchestrator.properties");
+            prop.load(input);
+            String serverIP = prop.getProperty("SERVER_IP");
+            String serverPort = prop.getProperty("SERVER_PORT");
+            values.add((String) serverIP);
+            values.add((String) serverPort); 
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        } finally {
+            if (input != null) {
+                try {
+                    input.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return values;
+    }
+
+    public static String getPredictorParameters()
+    {
+        Vector properties = getOrchProperties();
+        Client client = ClientBuilder.newClient();
+        String link="http://"+properties.get(0)+":"+properties.get(1)+"/rest/getEnvironment";
+        //System.out.println("ORCHESTRATOR: "+link);
+        //Environment environment = new Environment();
+        //System.out.println(environment);
+        
+        Environment environment = client.target(link).request(MediaType.APPLICATION_JSON).get(Environment.class);
+                
+        //Environment environment = client.target("http://"+properties.get(0)+":"+properties.get(1)+"/rest/getEnvironment").request(MediaType.APPLICATION_JSON).get(Environment.class);
+        client.close();
+
+        String TimeDate;
+        TimeDate = environment.getEnvTrackTime();						
+        String[] TimeDateSplit = TimeDate.split(" ");
+
+        return environment.getEnvTemperature() + "," + environment.getEnvPressure() + "," + environment.getEnvHumidity() 
+        + "," + environment.getEnvNoise() + "," + environment.getEnvAirQuality() + "," + environment.getEnvLuminosity1() 
+        + "," + environment.getEnvLuminosity2() + "," + environment.getEnvOpenWindow() + "," + environment.getEnvOpenDoor() 
+        + "," + TimeDateSplit[0] +  "," +  TimeDateSplit[1].replace(":","-").substring(0,8);
+    }
+
+}//end of class
